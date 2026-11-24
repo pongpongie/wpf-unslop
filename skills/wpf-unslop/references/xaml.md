@@ -85,9 +85,11 @@
    SDK 스타일이 아닌 .NET Framework 프로젝트는 각 파일을 이렇게 나열해야 합니다. SDK 스타일 프로젝트는 와일드카드(`Fonts\*.otf`)를 쓸 수 있습니다.
 3. `#` 뒤에는 파일 이름이 아니라 **글꼴 패밀리 이름**을 씁니다.
    ```xml
-   <FontFamily x:Key="Font.Ui">pack://application:,,,/Fonts/#Pretendard, Malgun Gothic</FontFamily>
+   <FontFamily x:Key="Font.Ui">pack://application:,,,/MyApp;component/Fonts/#Pretendard</FontFamily>
    ```
-   다른 어셈블리에 있으면 `pack://application:,,,/어셈블리이름;component/Fonts/#Pretendard`입니다.
+   `MyApp` 자리에 앱의 어셈블리 이름(`.csproj`의 `AssemblyName`, 없으면 프로젝트 이름)을 씁니다. `pack://application:,,,/Fonts/#Pretendard`처럼 어셈블리 이름을 빼도 앱 실행에는 문제가 없지만, `render-window.ps1`처럼 다른 프로그램이 앱을 불러와 그릴 때는 그 프로그램의 어셈블리를 찾게 되어 시스템 글꼴로 그려집니다.
+   Pretendard 정적 OTF는 굵기마다 파일이 따로 있지만 패밀리 이름은 모두 `Pretendard`이고, WPF가 굵기별로 알맞은 파일을 고릅니다. Pretendard는 한글과 라틴을 모두 담고 있으므로 대체 글꼴을 이어 쓸 필요가 없습니다.
+   창의 `FontFamily`에 이 키를 지정하면 하위 요소가 상속합니다. 코드에서 `FormattedText`로 직접 그리는 차트는 상속받지 않으므로 `FindResource("Font.Ui")`로 가져와 씁니다.
 4. 글꼴 라이선스(SIL OFL 등)를 확인하고 라이선스 파일을 함께 둡니다.
 
 `.csproj`를 바꾸는 작업이므로 사용자 허락을 받은 뒤 진행합니다.

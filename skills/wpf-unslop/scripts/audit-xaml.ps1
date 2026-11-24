@@ -139,7 +139,7 @@ foreach ($f in $files) {
         # Canvas 안의 도형은 일러스트로 보고 색·좌표·크기 점검에서 뺀다. Canvas마다 한 줄만 남긴다.
         if ($name -eq 'Canvas') {
             $shapes = @($el.Descendants() | Where-Object { $_.Name.LocalName -in $shapeNames })
-            if ($shapes.Count -ge 3) { Add-Finding 'ILLUSTRATION' $f.FullName $ln "Canvas 안 도형 $($shapes.Count)개 (일러스트면 내용으로 보고 유지, 색만 세계와 맞는지 확인)" }
+            if ($shapes.Count -ge 3) { Add-Finding 'ILLUSTRATION' $f.FullName $ln "Canvas 안 도형 $($shapes.Count)개 (일러스트면 내용으로 보고 유지, 색만 소재와 맞는지 확인)" }
         }
         $inCanvas = $null -ne ($el.Ancestors() | Where-Object { $_.Name.LocalName -eq 'Canvas' } | Select-Object -First 1)
         if ($inCanvas -and $shapeNames -contains $name) { continue }

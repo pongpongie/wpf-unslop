@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- render-window.ps1이 임시 폴더로 복사해서 빌드한다. 대상 앱보다 낮지 않은 TargetFramework가 필요하다. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>RenderWindow</AssemblyName>
+  </PropertyGroup>
+</Project>

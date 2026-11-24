@@ -54,11 +54,60 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "<skill 폴더>/scripts/capt
 
 ## 오프스크린 렌더링
 
-앱을 실행하지 않고 스타일이나 작은 화면 조각을 확인할 때 씁니다. 창을 띄우지 않으므로 포커스와 무관합니다. 사전 파일이 문법적으로 맞는지 검증하는 데도 씁니다.
+앱을 실행하지 않고 창을 PNG로 그립니다. 창을 띄우지 않으므로 포커스와 무관하고, 사용자 허락 없이 실행해도 됩니다. 수정 전후 비교는 이 방법을 기본으로 씁니다.
+
+### 창 전체: `render-window.ps1`
+
+앱을 빌드한 뒤, 빌드 결과 `.dll`을 넘깁니다.
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File "<skill 폴더>/scripts/render-window.ps1" -Assembly <앱 빌드 폴더>\<앱>.dll -Out <저장 폴더>\before.png
+```
+
+| 옵션 | 뜻 | 기본값 |
+| --- | --- | --- |
+| `-Assembly` | 앱 빌드 결과 `.dll` (.NET 6 이상) | 필수 |
+| `-Out` | 저장할 PNG 경로 | 필수 |
+| `-Window` | 그릴 창 클래스 이름 | `MainWindow` |
+| `-Width` | 폭(DIP). 0이면 창의 `Width`, 그것도 없으면 1360 | 0 |
+| `-Height` | 높이(DIP). 0이면 스크롤되는 내용까지 포함한 전체 높이 | 0 |
+| `-Scale` | 배율. 2면 고DPI처럼 2배 해상도 | 2 |
+| `-TargetFramework` | 렌더링 프로그램의 대상 프레임워크. 앱이 .NET 9 이상이면 그 버전으로 지정 | `net8.0-windows` |
+
+출력 줄의 의미:
+
+| 출력 | 뜻 |
+| --- | --- |
+| `SAVED: <경로> (<폭>x<높이> DIP, <배율>x)` | 저장 완료. 이미지를 읽어서 확인 |
+| `FONT <개수>  <FontFamily> / <굵기> -> <파일>` | 화면의 글자 요소가 실제로 그려진 글꼴 파일. 의도한 글꼴이 아니면 지정이 잘못된 것 |
+| `ANIM: ...` | `Loaded`로 시작하는 등장 애니메이션을 최종값으로 지정해서 그렸다는 뜻. 반복 애니메이션은 시작 전 상태로 그림 |
+| `ERROR: ...` (exit 1 이상) | 창 클래스 없음, 생성자 예외, 렌더링 프로그램 빌드 실패 등 |
+
+- 처음 실행할 때 렌더링 프로그램을 `%TEMP%\wpf-unslop-render-window`에 빌드합니다. .NET SDK 8 이상이 필요하고, 다음부터는 재사용합니다.
+- 수정 전후 비교는 같은 `-Width`, `-Height`, `-Scale`로 그립니다. `-Height 0`으로 각각 그린 뒤 두 높이 중 큰 값으로 다시 그리면 나란히 놓기 좋습니다.
+- `FONT` 줄은 반드시 확인합니다. 글꼴을 포함했는데 `MALGUN.TTF`나 `SEGOEUI.TTF`가 나오면 `FontFamily` 지정이나 `.csproj`의 `Resource` 항목이 잘못된 것입니다. 포함한 글꼴의 `FontFamily`는 `pack://application:,,,/어셈블리이름;component/Fonts/#글꼴이름`처럼 어셈블리 이름을 넣어야 렌더링 프로그램에서도 찾습니다.
+- 생성자가 인자를 받거나, 생성자에서 서버 연결처럼 실행 환경이 필요한 일을 하는 창은 그리지 못합니다(`ERROR: 창 생성자에서 예외`). 그런 창은 앱을 실행해서 확인합니다. 실행 전에 사용자 허락을 받습니다.
+- 데이터를 비동기로 불러오는 창은 빈 상태로 그려질 수 있습니다. 그 경우 이미지에 빈 상태가 보인다고 보고서에 적습니다.
+- .NET Framework 4.x 앱은 이 스크립트로 그릴 수 없습니다. 아래 사전 단위 렌더링을 쓰거나 앱을 실행해서 확인합니다.
+
+렌더링 프로그램(`scripts/render-window/Program.cs`)은 직접 만들 때 빠지기 쉬운 함정을 처리합니다.
+
+| 함정 | 처리 |
+| --- | --- |
+| 창에서 `Content`를 떼어 내면 `Window`에 지정한 `FontFamily`, `TextOptions`, `UseLayoutRounding` 같은 상속 속성이 끊겨서 시스템 기본 글꼴로 그려짐. 오류 없이 지나감 | `Window`에 지정된 상속 속성을 배경 `Border`로 옮김 |
+| 떼어 낸 `RadioButton`은 레이아웃 중에 `GroupName` 선택이 풀려서 선택 항목이 강조되지 않음 | 선택된 `ToggleButton`을 기록했다가 그리기 직전에 다시 지정 |
+| `ScrollViewer` 안의 내용은 창 크기로 그리면 아래쪽이 잘림 | `-Height 0`이면 내용 높이를 계산해서 씀 |
+| 창이 없으면 `Loaded`가 발생하지 않고 애니메이션 시계도 돌지 않아서, 페이드인 화면이 `Opacity 0`인 채로 비어 보임 | `Loaded`로 시작하는 Storyboard(창의 `Window.Triggers` 포함)의 각 애니메이션 최종값을 대상 속성에 직접 지정. 반복 애니메이션은 건너뜀 |
+| `x:Name` 이름 범위가 `Window`에 붙어 있어서, 떼어 내면 `ElementName` 바인딩과 Storyboard의 `TargetName`이 풀리지 않음 | 이름 범위를 배경 `Border`로 옮김 |
+| `App.xaml`의 리소스가 없으면 `StaticResource`를 찾지 못함 | 앱의 `Application` 클래스를 만들고 `InitializeComponent()`만 호출(`Run()`은 호출하지 않음) |
+
+### 사전과 작은 조각: PowerShell `XamlReader`
+
+테마 사전이 문법적으로 맞는지, 버튼 하나가 어떻게 보이는지 빠르게 볼 때 씁니다. .NET Framework 4.x 프로젝트에도 쓸 수 있습니다.
 
 ```powershell
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
-$rd = [Windows.Markup.XamlReader]::Parse([IO.File]::ReadAllText('Themes\Theme.xaml'))
+$rd = [Windows.Markup.XamlReader]::Parse([IO.File]::ReadAllText('C:\절대\경로\Themes\Theme.xaml'))
 $panel = New-Object Windows.Controls.StackPanel
 $panel.Resources = $rd
 $panel.Background = $rd['Brush.Window']
@@ -69,17 +118,12 @@ $bmp = New-Object Windows.Media.Imaging.RenderTargetBitmap 240, 120, 96, 96, ([W
 $bmp.Render($panel)
 $enc = New-Object Windows.Media.Imaging.PngBitmapEncoder
 $enc.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bmp))
-$fs = [IO.File]::Create('preview.png'); $enc.Save($fs); $fs.Close()
+$fs = [IO.File]::Create('C:\절대\경로\preview.png'); $enc.Save($fs); $fs.Close()
 ```
 
-- Windows PowerShell 5.1은 .NET Framework에서 돌기 때문에 .NET 6 이상으로 빌드한 프로젝트 어셈블리를 불러올 수 없습니다. 그런 프로젝트의 창은 scratchpad에 작은 렌더링 프로그램을 만들어 그립니다. `net8.0-windows` WPF 콘솔 프로젝트에서 대상 어셈블리를 `Reference`로 참조하고, `[STAThread] Main`에서 아래 순서로 처리합니다.
-  1. `new App()`과 `InitializeComponent()`로 앱 리소스를 불러옵니다. `Run()`은 호출하지 않습니다.
-  2. 창 객체를 만들고 `Show()` 없이 `Content`를 떼어 냅니다.
-  3. 떼어 낸 내용을 배경 `Border`에 넣고 `Measure`/`Arrange`한 뒤 `RenderTargetBitmap`으로 그립니다.
-
-  창을 띄우지 않으므로 포커스와 무관합니다. 생성자가 다른 창을 인자로 받는 경우처럼 만들기 어려운 창은 앱을 실행해서 확인합니다.
-- 이 방법은 `pack://` URI, 프로젝트의 사용자 정의 클래스(`xmlns:local`), converter를 해석하지 못합니다. 그런 화면은 앱을 실행해서 확인합니다.
+- 이 방식은 `pack://` URI, 프로젝트의 사용자 정의 클래스(`xmlns:local`), converter를 해석하지 못합니다. 그런 화면은 `render-window.ps1`을 씁니다.
 - `x:Class`가 있는 `Window` XAML은 그대로 parse되지 않습니다. 확인할 부분만 떼어서 렌더링합니다.
+- hover, pressed 같은 상태를 보려면 버튼을 여러 개 놓고 각 버튼의 템플릿 안 요소에 trigger가 바꾸는 값을 직접 지정해서 나란히 그립니다.
 
 ---
 
